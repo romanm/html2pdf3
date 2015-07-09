@@ -29,6 +29,7 @@ dependencies {
 	compile("dom4j:dom4j:1.6.1")
 	compile("jaxen:jaxen:1.1.6")
 	compile("net.sf.jtidy:jtidy:r938")
+	compile("org.xhtmlrenderer:flying-saucer-pdf:9.0.7")
 	testCompile("junit:junit")
 }
 
