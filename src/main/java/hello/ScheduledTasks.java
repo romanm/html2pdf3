@@ -18,6 +18,7 @@ import java.util.List;
 
 import org.dom4j.Document;
 import org.dom4j.DocumentException;
+import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.dom4j.io.DOMReader;
 import org.dom4j.io.HTMLWriter;
@@ -34,13 +35,20 @@ public class ScheduledTasks {
 	private static final Logger logger = LoggerFactory.getLogger(ScheduledTasks.class);
 	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
 	private String dirName = "/home/roman/jura/html2pdf/OUT/";
+	final Path pathStart = Paths.get(dirName);
+	private String dirPdfName = "/home/roman/jura/html2pdf/PDF/";
+	private String autoName = "";
+	private Document autoDocument = null;
 	private	int fileIdx = 0;
 	Tidy tidy = getTidy();
 	DOMReader domReader = new DOMReader();
 
 	@Scheduled(fixedRate = 5000000)
 	public void reportCurrentTime() {
-		logger.debug("The time is now " + dateFormat.format(new Date()));
+		int filesCount = countFiles(pathStart.toFile());
+		logger.debug("Files count "
+				+ filesCount
+				+ "The time is now " + dateFormat.format(new Date()));
 		try {
 			scanFiles();
 		} catch (IOException e) {
@@ -49,9 +57,8 @@ public class ScheduledTasks {
 	}
 
 	private void scanFiles() throws IOException {
-		final Path path = Paths.get(dirName);
-		logger.debug("Start folder : "+path);
-		Files.walkFileTree(path, new SimpleFileVisitor<Path>() {
+		logger.debug("Start folder : "+pathStart);
+		Files.walkFileTree(pathStart, new SimpleFileVisitor<Path>() {
 			
 			@Override
 			public FileVisitResult visitFile(Path file,
@@ -59,30 +66,61 @@ public class ScheduledTasks {
 				final FileVisitResult visitFile = super.visitFile(file, attrs);
 				fileIdx++;
 				logger.debug(fileIdx + "" + file);
-				if(fileIdx>1)
+				if(fileIdx>2){
+					saveHtml(autoDocument, dirPdfName + autoName+ ".html");
 					return null;
+				}
 				final String fileName = file.toString();
+				String[] folders = fileName.replace(dirName, "").replace("\\.html", "").split("\\/");
+				if(!autoName.equals(folders[0]))
+				{
+					if(autoDocument != null)
+					{
+						saveHtml(autoDocument, dirPdfName + autoName+ ".html");
+					}
+					autoDocument = DocumentHelper.createDocument();
+					Element htmElAutoDocument = autoDocument.addElement("html");
+					Element headElAddElement = htmElAutoDocument.addElement("head");
+					addUtf8(headElAddElement);
+					Element bodyElAutoDocument = htmElAutoDocument.addElement("body");
+					autoName = folders[0];
+					//Заголовок документа = ім'я машини
+					//Document head = vehicle name
+					String autoNameHuman = autoName.replace("_", " ");
+					headElAddElement.addElement("title").addText(autoNameHuman);
+					bodyElAutoDocument.addElement("h1").addText(autoNameHuman);
+				}
 				final String[] splitFileName = fileName.split("\\.");
 				final String fileExtention = splitFileName[splitFileName.length - 1];
 				if("html".equals(fileExtention)){
 					logger.debug(fileIdx + fileName);
 					Document document = html2xhtml(file.toFile());
 					document.selectSingleNode("/html/body//p[a/@class='print-page-button']").detach();
-					document.selectSingleNode("/html/head/title").detach();
+					document.selectSingleNode("/html/body/div/div[@class='back-to-top']").detach();
 					for (Element el : (List<Element>) document.selectNodes("/html/body/div//p/span[contains(text(),'Fig. Fig.')]")) {
 						el.setText(el.getText().replace("Fig. Fig.", "Fig. "));
 					}
-					((Element) document.selectSingleNode("/html/head"))
-					.addElement("meta").addAttribute("charset", "utf-8");
-					writeToFile(document, "test"+ fileIdx+ ".html");
+					document.selectSingleNode("/html/head/title").detach();
+					saveHtml(document, dirName +"test"+ fileIdx+ ".html");
 				}
 				return visitFile;
+			}
+
+			private void saveHtml(Document document, String htmlOutFileName) {
+				Element headEl = (Element) document.selectSingleNode("/html/head");
+				addUtf8(headEl);
+				writeToFile(document, htmlOutFileName);
+			}
+
+			private void addUtf8(Element headEl) {
+				headEl
+				.addElement("meta").addAttribute("charset", "utf-8");
 			}
 
 			OutputFormat prettyPrintFormat = OutputFormat.createPrettyPrint();
 			private void writeToFile(Document document, String htmlOutFileName) {
 				try {
-					FileOutputStream fileOutputStream = new FileOutputStream(dirName + htmlOutFileName);
+					FileOutputStream fileOutputStream = new FileOutputStream(htmlOutFileName);
 					HTMLWriter xmlWriter = new HTMLWriter(fileOutputStream, prettyPrintFormat);
 					xmlWriter.write(document);
 					xmlWriter.close();
@@ -146,5 +184,15 @@ public class ScheduledTasks {
 		return tidy;
 	}
 
+	public static int countFiles(File directory) {
+		int count = 0;
+		for (File file : directory.listFiles()) {
+			if (file.isDirectory()) {
+				count += countFiles(file); 
+			}
+			count++;
+		}
+		return count;
+	}
 
 }
