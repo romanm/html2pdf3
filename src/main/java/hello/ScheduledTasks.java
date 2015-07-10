@@ -14,7 +14,6 @@ import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
@@ -27,6 +26,10 @@ import org.dom4j.io.DOMReader;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.SAXReader;
 import org.dom4j.io.XMLWriter;
+import org.joda.time.DateTime;
+import org.joda.time.Period;
+import org.joda.time.format.PeriodFormatter;
+import org.joda.time.format.PeriodFormatterBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,8 +41,12 @@ import org.xhtmlrenderer.pdf.ITextRenderer;
 public class ScheduledTasks {
 	private static final Logger logger = LoggerFactory.getLogger(ScheduledTasks.class);
 	private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss");
-	private static String dirName = "/home/roman/jura/html2pdf/OUT/";
-	private String dirPdfName = "/home/roman/jura/html2pdf/PDF/";
+	//prodact
+//	private static String workDir = "/home/holweb/jura/pdf1/";
+	//development
+	private static String workDir = "/home/roman/jura/html2pdf/";
+	private static String dirName = workDir + "OUT/";
+	private static String dirPdfName = workDir+ "PDF/";
 //	private String dirTmpName = "/home/roman/jura/html2pdf/tmp/";
 	final static Path pathStart = Paths.get(dirName);
 	private String autoName = "", h2 = "", h3 = "", h4 = "";
@@ -49,23 +56,51 @@ public class ScheduledTasks {
 	Tidy tidy = getTidy();
 	DOMReader domReader = new DOMReader();
 	int filesCount;
-	long startMillis;
+	DateTime startMillis;
+	static PeriodFormatter hmsFormatter = new PeriodFormatterBuilder()
+			.appendHours().appendSuffix("h ")
+			.appendMinutes().appendSuffix("m ")
+			.appendSeconds().appendSuffix("s ")
+			.toFormatter();
 
-	@Scheduled(fixedRate = 5000000)
+	@Scheduled(fixedRate = 500000000)
 	public void reportCurrentTime() {
-		startMillis = Calendar.getInstance().getTimeInMillis();
+		startMillis = new DateTime();
 		filesCount = countFiles2(pathStart.toFile());
-		logger.debug("Files count "
-				+ filesCount
-				+ ". The time is now " + dateFormat.format(new Date()));
+		logger.debug("Files count " + filesCount + ". The time is now " + dateFormat.format(new Date()));
 		try {
-			scanFiles();
+//			makeLargeHTML();
+			makePdfFromHTML();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
 
-	private void scanFiles() throws IOException {
+	private void makePdfFromHTML() throws IOException {
+		Path pathPdf = Paths.get(dirPdfName);
+		logger.debug("Start folder : "+pathPdf);
+		Files.walkFileTree(pathPdf, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file,
+					BasicFileAttributes attrs) throws IOException {
+				final FileVisitResult visitFile = super.visitFile(file, attrs);
+				final String fileName = file.toString();
+				final String[] splitFileName = fileName.split("\\.");
+				final String fileExtention = splitFileName[splitFileName.length - 1];
+				if("html".equals(fileExtention)){
+					logger.debug(fileName);
+					try {
+						savePdf(fileName, fileName+".pdf");
+						Files.delete(file);
+					} catch (com.lowagie.text.DocumentException | IOException e) {
+						System.out.println(fileName);
+						e.printStackTrace();
+					}
+				}
+				return visitFile;
+			}
+		});}
+	private void makeLargeHTML() throws IOException {
 		logger.debug("Start folder : "+pathStart);
 		Files.walkFileTree(pathStart, new SimpleFileVisitor<Path>() {
 			
@@ -74,23 +109,13 @@ public class ScheduledTasks {
 					BasicFileAttributes attrs) throws IOException {
 				final FileVisitResult visitFile = super.visitFile(file, attrs);
 				fileIdx++;
-				int procent = fileIdx*100/filesCount;
-				long sec = (Calendar.getInstance().getTimeInMillis() - startMillis)/1000;
-				logger.debug(fileIdx + ""
-						+ "/"
-						+ filesCount
-						+ "("
-						+ procent
-						+ "%, "
-						+ sec
-						+ "s)" + file);
+				logger.debug(fileIdx + "" + "/" + filesCount + procentWorkTime() + file);
 				if(fileIdx == filesCount){
 					saveHtmlAndPdf(autoDocument, dirPdfName + autoName+ ".html");
 					return null;
 				}
 				final String fileName = file.toString();
 				String[] folders = fileName.replace(dirName, "").replace(".html", "").split("\\/");
-				logger.debug(""+folders);
 				final String[] splitFileName = fileName.split("\\.");
 				final String fileExtention = splitFileName[splitFileName.length - 1];
 				if("html".equals(fileExtention)){
@@ -108,24 +133,23 @@ public class ScheduledTasks {
 						autoName = folders[0];
 						//Заголовок документа = ім'я машини
 						//Document head = vehicle name
-						String autoNameHuman = autoName.replace("_", " ");
-						headElAddElement.addElement("title").addText(autoNameHuman);
-						bodyElAutoDocument.addElement("h1").addText(autoNameHuman);
+						headElAddElement.addElement("title").addText(humanSpace(autoName));
+						bodyElAutoDocument.addElement("h1").addText(humanSpace(autoName));
 					}
 					if(!h2.equals(folders[1]))
 					{
 						h2 = folders[1];
-						bodyElAutoDocument.addElement("h2").addText(h2);
+						bodyElAutoDocument.addElement("h2").addText(humanSpace(h2));
 					}
 					if(!h3.equals(folders[2]))
 					{
 						h3 = folders[2];
-						bodyElAutoDocument.addElement("h3").addText(h3);
+						bodyElAutoDocument.addElement("h3").addText(humanSpace(h3));
 					}
 					if(!h4.equals(folders[3]))
 					{
 						h4 = folders[3];
-						bodyElAutoDocument.addElement("h4").addText(h4);
+						bodyElAutoDocument.addElement("h4").addText(humanSpace(h4));
 					}
 					Document document = html2xhtml(file.toFile());
 					document.selectSingleNode("/html/body//p[a/@class='print-page-button']").detach();
@@ -141,32 +165,21 @@ public class ScheduledTasks {
 				return visitFile;
 			}
 
+			private String humanSpace(String str) {
+				return str.replace("_", " ");
+			}
+
 			private void saveHtmlAndPdf(Document document, String htmlOutFileName) {
-				System.out.print(htmlOutFileName);
 				Element headEl = (Element) document.selectSingleNode("/html/head");
 				addUtf8(headEl);
 				writeToFile(document, htmlOutFileName);
+				if(true)
+					return;
 				try {
 					savePdf(htmlOutFileName, htmlOutFileName+".pdf");
 				} catch (com.lowagie.text.DocumentException | IOException e) {
 					e.printStackTrace();
 				}
-			}
-
-			private void savePdf(String htmlOutFileName, String HTML_TO_PDF) throws com.lowagie.text.DocumentException, IOException {
-				String File_To_Convert = htmlOutFileName;
-				String url = new File(File_To_Convert).toURI().toURL().toString();
-				System.out.println(" 44 "+url);
-				OutputStream os = new FileOutputStream(HTML_TO_PDF);
-				ITextRenderer iTextRenderer2 = new ITextRenderer();
-				ITextRenderer iTextRenderer = iTextRenderer2;
-				ITextRenderer renderer = iTextRenderer;
-				renderer.setDocument(url);
-				renderer.layout();
-				System.out.println(" 49 ");
-				renderer.createPDF(os);
-				System.out.println(" 51 ");
-				os.close();
 			}
 
 			private void addUtf8(Element headEl) {
@@ -179,6 +192,7 @@ public class ScheduledTasks {
 					FileOutputStream fileOutputStream = new FileOutputStream(htmlOutFileName);
 //					HTMLWriter xmlWriter = new HTMLWriter(fileOutputStream, prettyPrintFormat);
 					XMLWriter xmlWriter = new XMLWriter(fileOutputStream, prettyPrintFormat);
+					logger.debug(""+document.asXML().length());
 					xmlWriter.write(document);
 					xmlWriter.close();
 				} catch (FileNotFoundException e) {
@@ -227,6 +241,25 @@ public class ScheduledTasks {
 				}
 			}
 		});
+	}
+
+	void savePdf(String htmlOutFileName, String HTML_TO_PDF) throws com.lowagie.text.DocumentException, IOException {
+		String url = new File(htmlOutFileName).toURI().toURL().toString();
+		logger.debug(procentWorkTime()+" - start - "+HTML_TO_PDF);
+		ITextRenderer renderer = new ITextRenderer();
+		renderer.setDocument(url);
+		renderer.layout();
+		OutputStream os = new FileOutputStream(HTML_TO_PDF);
+		renderer.createPDF(os);
+		os.close();
+		logger.debug(procentWorkTime()+" - end - "+HTML_TO_PDF);
+	}
+
+	String procentWorkTime() {
+		int procent = fileIdx*100/filesCount;
+		String workTime = hmsFormatter.print(new Period(startMillis, new DateTime()));
+		String procentSecond = " - html2pdf3 - (" + procent + "%, " + workTime + "s)";
+		return procentSecond;
 	}
 
 	private Tidy getTidy() {

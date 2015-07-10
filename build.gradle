@@ -30,6 +30,7 @@ dependencies {
 	compile("jaxen:jaxen:1.1.6")
 	compile("net.sf.jtidy:jtidy:r938")
 	compile("org.xhtmlrenderer:flying-saucer-pdf:9.0.7")
+	compile "joda-time:joda-time:2.8.1"
 	testCompile("junit:junit")
 }
 
