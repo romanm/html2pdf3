@@ -22,6 +22,7 @@ import org.dom4j.DocumentException;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.dom4j.Node;
+import org.dom4j.Text;
 import org.dom4j.io.DOMReader;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.SAXReader;
@@ -44,7 +45,9 @@ public class ScheduledTasks {
 	//prodact
 //	private static String workDir = "/home/holweb/jura/pdf1/";
 	//development
-	private static String workDir = "/home/roman/jura/html2pdf/";
+//	private static String workDir = "/home/roman/jura/html2pdf/";
+//	private static String workDir = "/home/roman/jura/html2pdf2/";
+	private static String workDir = "/home/roman/jura/1998/";
 	private static String dirName = workDir + "OUT/";
 	private static String dirPdfName = workDir+ "PDF/";
 //	private String dirTmpName = "/home/roman/jura/html2pdf/tmp/";
@@ -69,8 +72,8 @@ public class ScheduledTasks {
 		filesCount = countFiles2(pathStart.toFile());
 		logger.debug("Files count " + filesCount + ". The time is now " + dateFormat.format(new Date()));
 		try {
-//			makeLargeHTML();
-			makePdfFromHTML();
+			makeLargeHTML();
+//			makePdfFromHTML();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -85,13 +88,14 @@ public class ScheduledTasks {
 					BasicFileAttributes attrs) throws IOException {
 				final FileVisitResult visitFile = super.visitFile(file, attrs);
 				final String fileName = file.toString();
+				logger.debug(fileName);
 				final String[] splitFileName = fileName.split("\\.");
 				final String fileExtention = splitFileName[splitFileName.length - 1];
 				if("html".equals(fileExtention)){
 					logger.debug(fileName);
 					try {
 						savePdf(fileName, fileName+".pdf");
-						Files.delete(file);
+//						Files.delete(file);
 					} catch (com.lowagie.text.DocumentException | IOException e) {
 						System.out.println(fileName);
 						e.printStackTrace();
@@ -100,6 +104,7 @@ public class ScheduledTasks {
 				return visitFile;
 			}
 		});}
+
 	private void makeLargeHTML() throws IOException {
 		logger.debug("Start folder : "+pathStart);
 		Files.walkFileTree(pathStart, new SimpleFileVisitor<Path>() {
@@ -123,7 +128,10 @@ public class ScheduledTasks {
 					{
 						if(autoDocument != null)
 						{
+							buildBookmark(autoDocument);
 							saveHtmlAndPdf(autoDocument, dirPdfName + autoName+ ".html");
+							logger.debug("-------one save an basta----------------------");
+							return null;
 						}
 						autoDocument = DocumentHelper.createDocument();
 						Element htmElAutoDocument = autoDocument.addElement("html");
@@ -139,17 +147,20 @@ public class ScheduledTasks {
 					if(!h2.equals(folders[1]))
 					{
 						h2 = folders[1];
-						bodyElAutoDocument.addElement("h2").addText(humanSpace(h2));
+						bodyElAutoDocument.addElement("h2").addText(humanSpace(h2))
+						.addAttribute("class", "bookmark");
 					}
 					if(!h3.equals(folders[2]))
 					{
 						h3 = folders[2];
-						bodyElAutoDocument.addElement("h3").addText(humanSpace(h3));
+						bodyElAutoDocument.addElement("h3").addText(humanSpace(h3))
+						.addAttribute("class", "bookmark");
 					}
 					if(!h4.equals(folders[3]))
 					{
 						h4 = folders[3];
-						bodyElAutoDocument.addElement("h4").addText(humanSpace(h4));
+						bodyElAutoDocument.addElement("h4").addText(humanSpace(h4))
+						.addAttribute("class", "bookmark");
 					}
 					Document document = html2xhtml(file.toFile());
 					document.selectSingleNode("/html/body//p[a/@class='print-page-button']").detach();
@@ -165,6 +176,51 @@ public class ScheduledTasks {
 				return visitFile;
 			}
 
+			private void buildBookmark(Document autoDocument) {
+				List<Element> bookmarkEls = autoDocument.selectNodes("/html/body/*[@class='bookmark']");
+				logger.debug(""+bookmarkEls.size());
+				Element headEl = (Element) autoDocument.selectSingleNode("/html/head");
+				Element bookmarks = headEl.addElement("bookmarks")
+						,h2 = null, h3 = null, h4 = null;
+				int h2i = 0, h3i = 0, h4i = 0;
+				String h2id = null, h3id = null, h4id = null;
+				for (Element h234Element : bookmarkEls) {
+					if(h234Element.getName().equals("h2"))
+					{
+						h2 = bookmarks.addElement("bookmark");
+						h2id = "bm"+h2i++;
+						makeBookmark(h2, h234Element, h2id);
+					}
+					else
+						if(h234Element.getName().equals("h3"))
+						{
+							h3 = h2.addElement("bookmark");
+							h3id = h2id + "bm"+h3i++;
+							makeBookmark(h3, h234Element, h3id);
+						}
+						else
+							if(h234Element.getName().equals("h4"))
+							{
+								h4 = h3.addElement("bookmark");
+								h4id = h2id + h3id + "bm"+h4i++;
+								makeBookmark(h4, h234Element, h4id);
+							}
+					
+				}
+			}
+
+			private void makeBookmark(Element h234InHead, Element h234Element, String id) {
+				String text = h234Element.getText();
+				h234InHead.addAttribute("name", text);
+				h234InHead.addAttribute("href", "#"+id);
+				Node selectSingleNode = h234Element.selectSingleNode("text()");
+				logger.debug(""+selectSingleNode);
+				selectSingleNode.detach();
+				logger.debug(""+h234Element);
+				
+				h234Element.addElement("a").addAttribute("name", id).setText(text);
+			}
+
 			private String humanSpace(String str) {
 				return str.replace("_", " ");
 			}
@@ -173,7 +229,7 @@ public class ScheduledTasks {
 				Element headEl = (Element) document.selectSingleNode("/html/head");
 				addUtf8(headEl);
 				writeToFile(document, htmlOutFileName);
-				if(true)
+				if(false)
 					return;
 				try {
 					savePdf(htmlOutFileName, htmlOutFileName+".pdf");
