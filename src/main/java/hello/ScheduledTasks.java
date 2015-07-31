@@ -22,7 +22,6 @@ import org.dom4j.DocumentException;
 import org.dom4j.DocumentHelper;
 import org.dom4j.Element;
 import org.dom4j.Node;
-import org.dom4j.Text;
 import org.dom4j.io.DOMReader;
 import org.dom4j.io.OutputFormat;
 import org.dom4j.io.SAXReader;
@@ -48,8 +47,15 @@ public class ScheduledTasks {
 //	private static String workDir = "/home/roman/jura/html2pdf/";
 //	private static String workDir = "/home/roman/jura/html2pdf2/";
 	private static String workDir = "/home/roman/jura/1998/";
+	//develop
 	private static String dirName = workDir + "OUT/";
 	private static String dirPdfName = workDir+ "PDF/";
+	private static String dirLargeHtmlName = workDir+ "PDF/";
+	//produktiv
+//	private static String dirName = workDir + "OUT/";
+//	private static String dirPdfName = workDir+ "PDF/";
+//	private static String dirLargeHtmlName = workDir+ "PDF/";
+
 //	private String dirTmpName = "/home/roman/jura/html2pdf/tmp/";
 	final static Path pathStart = Paths.get(dirName);
 	private String autoName = "", h2 = "", h3 = "", h4 = "";
@@ -116,7 +122,7 @@ public class ScheduledTasks {
 				fileIdx++;
 				logger.debug(fileIdx + "" + "/" + filesCount + procentWorkTime() + file);
 				if(fileIdx == filesCount){
-					saveHtmlAndPdf(autoDocument, dirPdfName + autoName+ ".html");
+					saveLargeHtml(autoDocument, dirLargeHtmlName + autoName+ ".html");
 					return null;
 				}
 				final String fileName = file.toString();
@@ -125,13 +131,13 @@ public class ScheduledTasks {
 				final String fileExtention = splitFileName[splitFileName.length - 1];
 				if("html".equals(fileExtention)){
 					if(!autoName.equals(folders[0]))
-					{
+					{//save previous html group as file
 						if(autoDocument != null)
 						{
 							buildBookmark(autoDocument);
-							saveHtmlAndPdf(autoDocument, dirPdfName + autoName+ ".html");
-							logger.debug("-------one save an basta----------------------");
-							return null;
+							saveLargeHtml(autoDocument, dirLargeHtmlName + autoName+ ".html");
+							//							logger.debug("------- save one file and basta----------------------");
+							//							return null;
 						}
 						autoDocument = DocumentHelper.createDocument();
 						Element htmElAutoDocument = autoDocument.addElement("html");
@@ -163,15 +169,19 @@ public class ScheduledTasks {
 						.addAttribute("class", "bookmark");
 					}
 					Document document = html2xhtml(file.toFile());
-					document.selectSingleNode("/html/body//p[a/@class='print-page-button']").detach();
-					document.selectSingleNode("/html/body/div/div[@class='back-to-top']").detach();
+					Node printPageButton = document.selectSingleNode("/html/body//p[a/@class='print-page-button']");
+					if(printPageButton != null)
+						printPageButton.detach();
+					Node backToTop = document.selectSingleNode("/html/body/div/div[@class='back-to-top']");
+					if(backToTop != null)
+						backToTop.detach();
 					for (Element el : (List<Element>) document.selectNodes("/html/body/div//p/span[contains(text(),'Fig. Fig.')]")) {
 						el.setText(el.getText().replace("Fig. Fig.", "Fig. "));
 					}
 					Node bodyDivEl = document.selectSingleNode("/html/body/div").detach();
 					bodyElAutoDocument.add(bodyDivEl);
-//					document.selectSingleNode("/html/head/title").detach();
-//					saveHtml(document, dirTmpName +"test"+ fileIdx+ ".html");
+					//					document.selectSingleNode("/html/head/title").detach();
+					//					saveHtml(document, dirTmpName +"test"+ fileIdx+ ".html");
 				}
 				return visitFile;
 			}
@@ -214,10 +224,7 @@ public class ScheduledTasks {
 				h234InHead.addAttribute("name", text);
 				h234InHead.addAttribute("href", "#"+id);
 				Node selectSingleNode = h234Element.selectSingleNode("text()");
-				logger.debug(""+selectSingleNode);
 				selectSingleNode.detach();
-				logger.debug(""+h234Element);
-				
 				h234Element.addElement("a").addAttribute("name", id).setText(text);
 			}
 
@@ -225,16 +232,22 @@ public class ScheduledTasks {
 				return str.replace("_", " ");
 			}
 
-			private void saveHtmlAndPdf(Document document, String htmlOutFileName) {
-				Element headEl = (Element) document.selectSingleNode("/html/head");
-				addUtf8(headEl);
-				writeToFile(document, htmlOutFileName);
-				if(false)
-					return;
+			private void savePdfFile(Document document, String htmlOutFileName) {
 				try {
 					savePdf(htmlOutFileName, htmlOutFileName+".pdf");
 				} catch (com.lowagie.text.DocumentException | IOException e) {
 					e.printStackTrace();
+				}
+			}
+
+			private void saveLargeHtml(Document document, String htmlOutFileName) {
+				Element headEl = (Element) document.selectSingleNode("/html/head");
+				addUtf8(headEl);
+				logger.info(htmlOutFileName);
+				try{
+					writeToFile(document, htmlOutFileName);
+				}catch (Exception e){
+					logger.info(e.getMessage());
 				}
 			}
 
